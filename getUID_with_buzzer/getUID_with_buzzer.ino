@@ -40,6 +40,13 @@ void setup() {
 
 void loop() {
 
+  if(Serial.available() > 0){
+    Serial.println(Serial.readString().toInt());
+    Serial.end();
+    Serial.begin(9600);
+    buzz();
+  }
+
   if(mfrc522.PICC_IsNewCardPresent()) {
     if (mfrc522.PICC_ReadCardSerial()) {
       uid = getID();
