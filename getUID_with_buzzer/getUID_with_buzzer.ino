@@ -2,7 +2,9 @@
 #include <MFRC522.h>
 #include <EEPROM.h>
 #include <Servo.h>
-
+#include <AES.h>
+#include <stdint.h>
+#include <string.h>
 
 #define RST_PIN 9
 #define SS_PIN 10
@@ -13,21 +15,24 @@ MFRC522 mfrc522(SS_PIN, RST_PIN);
 #define BUZZER 5
 
 unsigned long uid;
-int pos = 0;
+unsigned long null = 00000000;
+int pos;
 Servo myservo;
 bool unlocked = false;
 
+AES128 aes;
+
 void setup() {
+
 // Set up connection
   Serial.begin(9600);
-
+  
 // Set up servo motor
   myservo.attach(6);
   myservo.write(135);
 
 // Set up storage
-  unsigned long null = 00000000;
-  unsigned long AuthorizedTags[] = {};
+  //unsigned long AuthorizedTags[] = {};
   unsigned long ownerTag = 3225510982;
   EEPROM.put(0,ownerTag);
   
@@ -35,16 +40,21 @@ void setup() {
   SPI.begin();
   mfrc522.PCD_Init();
   pinMode(BUZZER, OUTPUT);
-  
 }
 
 void loop() {
 
   if(Serial.available() > 0){
-    Serial.println(Serial.readString().toInt());
+    String data;
+    data = Serial.readString();
+    String res = caesar_decrypt(data,1);
+    unsigned long hexValue = strtoul(res.c_str(), nullptr, 16);
+    buzz();
+    Serial.println(hexValue);
+    addEEPROM(hexValue);
     Serial.end();
     Serial.begin(9600);
-    buzz();
+    
   }
 
   if(mfrc522.PICC_IsNewCardPresent()) {
@@ -105,4 +115,58 @@ unsigned long getID(){
 
   mfrc522.PICC_HaltA(); // Stop reading
   return hex_num;
+}
+
+String caesar_decrypt(String text, int shift) {
+  String result = "";
+
+  for (char character : text) {
+    if (isAlpha(character)) {
+      bool isUpper = isUpperCase(character);
+      character = toLowerCase(character);
+      int charCode = character - 'a';
+      charCode = (charCode - shift + 26) % 26 + 'a';
+
+      if (isUpper) {
+        character = toupper(charCode);
+      } else {
+        character = charCode;
+      }
+    } else if (isDigit(character)) {
+      int digit = character - '0';
+      digit = (digit + shift) % 10 + '0';
+      character = digit;
+    }
+
+    result += character;
+  }
+
+  return result;
+}
+
+void addEEPROM(unsigned long uid){
+  int i = isAdded(uid);
+  if (i > 0){
+    EEPROM.put(i,null);
+    EEPROM.write(1023,count-1)
+  } else if (i == -1) {
+    int count = EEPROM.read(1023);
+    EEPROM.put(count*8,uid);
+    EEPROM.write(1023,count+1);
+  }
+  
+}
+
+int isAdded(unsigned long uid){
+  int count = EEPROM.read(1023);
+  int i;
+  for(i=0;i < 8*count; i = i + 8){
+    unsigned long uidlst;
+    EEPROM.get(i,uidlst);
+
+    if(uid == uidlst){
+      return i;
+    }
+  }
+  return -1;
 }
