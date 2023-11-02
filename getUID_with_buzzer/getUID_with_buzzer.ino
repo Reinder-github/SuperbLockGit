@@ -2,17 +2,14 @@
 #include <MFRC522.h>
 #include <EEPROM.h>
 #include <Servo.h>
-#include <AES.h>
 #include <stdint.h>
 #include <string.h>
 
 #define RST_PIN 9
 #define SS_PIN 10
-
+#define BUZZER 5
 
 MFRC522 mfrc522(SS_PIN, RST_PIN);
-
-#define BUZZER 5
 
 unsigned long uid;
 unsigned long null = 00000000;
@@ -20,9 +17,14 @@ int pos;
 Servo myservo;
 bool unlocked = false;
 
-AES128 aes;
-
 void setup() {
+  // Empty authorized users and reset count
+  /*int g;
+  for(g = 8; g < 1024; g += 1){
+    EEPROM.write(g,0);
+  }
+  EEPROM.write(1023,1);*/ 
+
 
 // Set up connection
   Serial.begin(9600);
@@ -50,7 +52,6 @@ void loop() {
     String res = caesar_decrypt(data,1);
     unsigned long hexValue = strtoul(res.c_str(), nullptr, 16);
     buzz();
-    Serial.println(hexValue);
     addEEPROM(hexValue);
     Serial.end();
     Serial.begin(9600);
@@ -146,13 +147,31 @@ String caesar_decrypt(String text, int shift) {
 
 void addEEPROM(unsigned long uid){
   int i = isAdded(uid);
-  if (i > 0){
-    EEPROM.put(i,null);
-    EEPROM.write(1023,count-1)
-  } else if (i == -1) {
-    int count = EEPROM.read(1023);
+  int count = EEPROM.read(1023);
+  if (i > 0){ // Remove tag
+    
+    if (i/8 < count){
+      Serial.println('tag removed and other tags moved!');
+      int j;
+      unsigned long temp;
+      for(j = i/8; j < count-1; j += 1){
+        EEPROM.get((j+1)*8,temp);
+        EEPROM.put(j*8,temp);   
+      }
+      EEPROM.put((j)*8,null);
+
+      Serial.println(j);
+    } else {
+      Serial.println('tag removed');
+      EEPROM.put(i,null);
+    }
+
+    EEPROM.write(1023,count-1);
+
+  } else if (i == -1) { // Add tag
     EEPROM.put(count*8,uid);
     EEPROM.write(1023,count+1);
+    Serial.println('tag added!');
   }
   
 }
